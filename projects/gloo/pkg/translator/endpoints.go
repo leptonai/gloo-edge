@@ -1,6 +1,8 @@
 package translator
 
 import (
+	"strings"
+
 	envoy_config_core_v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_config_endpoint_v3 "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	structpb "github.com/golang/protobuf/ptypes/struct"
@@ -154,13 +156,14 @@ func getLbMetadata(upstream *v1.Upstream, labels map[string]string, zeroValue st
 		}
 	}
 
-	if labels != nil {
-		for k, v := range labels {
-			labelsStruct.GetFields()[k] = &structpb.Value{
-				Kind: &structpb.Value_StringValue{
-					StringValue: v,
-				},
-			}
+	for k, v := range labels {
+		if strings.HasPrefix(v, headerToMetadataSelectorValuePrefix) {
+			continue
+		}
+		labelsStruct.GetFields()[k] = &structpb.Value{
+			Kind: &structpb.Value_StringValue{
+				StringValue: v,
+			},
 		}
 	}
 
