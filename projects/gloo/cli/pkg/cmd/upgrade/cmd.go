@@ -18,7 +18,7 @@ import (
 	"github.com/solo-io/go-utils/cliutils"
 	"github.com/solo-io/go-utils/versionutils"
 
-	"github.com/google/go-github/github"
+	"github.com/google/go-github/v50/github"
 	"github.com/solo-io/gloo/projects/gloo/cli/pkg/cmd/options"
 	"github.com/solo-io/solo-kit/pkg/errors"
 	"github.com/spf13/cobra"
@@ -211,7 +211,7 @@ const errorNotFoundString = "couldn't find any recent release with the desired a
 func tryGetAssetWithName(release *github.RepositoryRelease, expectedAssetName string) *github.ReleaseAsset {
 	for _, asset := range release.Assets {
 		if asset.GetName() == expectedAssetName {
-			return &asset
+			return asset
 		}
 	}
 	return nil
