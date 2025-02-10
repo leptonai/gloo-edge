@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v32/github"
+	"github.com/google/go-github/v50/github"
 	errors "github.com/rotisserie/eris"
 	"github.com/solo-io/go-utils/changelogutils"
 	"github.com/solo-io/go-utils/githubutils"
