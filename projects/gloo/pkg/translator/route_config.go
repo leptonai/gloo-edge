@@ -462,12 +462,16 @@ func AddMetadataToHeaderMapping(endpointMetadataKeyToHeader map[string]string, l
 	for endpointMetadataKey, v := range literalConfig {
 		endpointMetadataKey = strings.TrimSpace(endpointMetadataKey)
 		if endpointMetadataKey == "" {
+			Logger.Errorf("endpoint subset config key should not be empty")
 			continue
 		}
 		v = strings.TrimSpace(v)
 		fromHeaderName := strings.TrimSpace(strings.TrimPrefix(v, headerToMetadataSelectorValuePrefix))
-		if fromHeaderName == v || fromHeaderName == "" {
+		if fromHeaderName == v {
 			continue
+		}
+		if fromHeaderName == "" {
+			Logger.Errorf("endpoint subset header name should not be empty, key: %s", endpointMetadataKey)
 		}
 		endpointMetadataKeyToHeader[endpointMetadataKey] = fromHeaderName
 	}
@@ -522,6 +526,7 @@ func setHeaderToMetadataFilter(route *v1.Route, out *envoy_config_route_v3.Route
 	}
 	configAny, err := anypb.New(config)
 	if err != nil {
+		Logger.Errorf("failed to convert config to protobuf any type")
 		return
 	}
 	out.TypedPerFilterConfig[HTTPHeaderToMetadata] = configAny
