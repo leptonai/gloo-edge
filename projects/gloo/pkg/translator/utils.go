@@ -1,9 +1,11 @@
 package translator
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	errors "github.com/rotisserie/eris"
 
@@ -14,6 +16,8 @@ import (
 	"github.com/golang/protobuf/ptypes/any"
 	"github.com/solo-io/gloo/projects/gloo/pkg/utils"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // returns the name of the cluster created for a given upstream
@@ -131,4 +135,60 @@ func isPureIPv4Address(ipString string) bool {
 		}
 	}
 	return false
+}
+
+var (
+	Logger *LeptonLogger
+)
+
+func init() {
+	Logger = CreateLogger(DefaultLoggerConfig())
+}
+
+func DefaultLoggerConfig() *zap.Config {
+	c := zap.NewProductionConfig()
+	c.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.RFC3339)
+	return &c
+}
+
+func CreateLogger(config *zap.Config) *LeptonLogger {
+	if config == nil {
+		config = DefaultLoggerConfig()
+	}
+
+	l, err := config.Build()
+	if err != nil {
+		panic(err)
+	}
+
+	return &LeptonLogger{
+		SugaredLogger: l.Sugar(),
+		zapLogger:     l,
+	}
+}
+
+type LeptonLogger struct {
+	*zap.SugaredLogger
+	zapLogger *zap.Logger
+}
+
+func (l *LeptonLogger) ZapLogger() *zap.Logger {
+	return l.zapLogger
+}
+
+// Override the default logger's Errorw func to down level context canceled error
+func (l *LeptonLogger) Errorw(msg string, keysAndValues ...interface{}) {
+	for i := 0; i < len(keysAndValues); i += 2 {
+		if keysAndValues[i] != "error" {
+			continue
+		}
+		if err, ok := keysAndValues[i+1].(error); ok {
+			if strings.Contains(err.Error(), context.Canceled.Error()) {
+				l.SugaredLogger.Warnw(msg, keysAndValues...)
+				return
+			}
+		}
+	}
+
+	l.SugaredLogger.Errorw(msg, keysAndValues...)
 }

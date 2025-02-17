@@ -28,6 +28,8 @@ var _ NetworkFilterTranslator = new(httpNetworkFilterTranslator)
 
 const (
 	DefaultHttpStatPrefix = "http"
+
+	HTTPHeaderToMetadata = "envoy.filters.http.header_to_metadata"
 )
 
 type httpNetworkFilterTranslator struct {
@@ -205,7 +207,21 @@ func (h *hcmNetworkFilterTranslator) computeHttpFilters(params plugins.Params) [
 	// "Stage" is the type we use to specify when a filter should be run
 	envoyHttpFilters := sortHttpFilters(httpFilters)
 
-	// 2. Configure the router filter
+	// 2. Register no-op header_to_metadata filter
+	// The per-route config will overwrite the config for the route when used
+	envoyHttpFilters = append(envoyHttpFilters,
+		&envoyhttp.HttpFilter{
+			Name: HTTPHeaderToMetadata,
+			ConfigType: &envoyhcm.HttpFilter_TypedConfig{
+				TypedConfig: &any.Any{
+					TypeUrl: "type.googleapis.com/envoy.extensions.filters.http.header_to_metadata.v3.Config",
+				},
+			},
+			IsOptional: true,
+		},
+	)
+
+	// 3. Configure the router filter
 	// As outlined by the Envoy docs, the last configured filter has to be a terminal filter.
 	// We set the Router filter (https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/router_filter#config-http-filters-router)
 	// as the terminal filter in Gloo Edge.

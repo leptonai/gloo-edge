@@ -9,9 +9,11 @@ import (
 	"unicode"
 
 	"github.com/solo-io/gloo/projects/gloo/pkg/plugins/dynamic_forward_proxy"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	envoy_config_core_v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_config_route_v3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	envoy_header_to_metadata_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/header_to_metadata/v3"
 	envoy_type_matcher_v3 "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	errors "github.com/rotisserie/eris"
@@ -49,6 +51,9 @@ var (
 	PathEndsWithInvalidCharactersError = func(s, invalid string) error {
 		return errors.Errorf("path [%s] cannot end with [%s]", s, invalid)
 	}
+
+	// for dynamically performing subsetting
+	headerToMetadataSelectorValuePrefix = "$FromHeader:"
 )
 
 var (
@@ -174,6 +179,7 @@ func (h *httpRouteConfigurationTranslator) envoyRoutes(
 
 	for i := range out {
 		h.setAction(params, routeReport, in, out[i])
+		setHeaderToMetadataFilter(in, out[i])
 		validateEnvoyRoute(out[i], routeReport)
 	}
 
@@ -448,6 +454,82 @@ func (h *httpRouteConfigurationTranslator) setRouteAction(params plugins.RoutePa
 		return nil
 	}
 	return errors.Errorf("unknown upstream destination type")
+}
+
+// addMetadataToHeaderMapping tries to identify how request header name maps to endpoint metadata key, so that envoy will route requests
+// with the header value to corresponding endpoint with same metadata value, using Envoy header_to_metadata http filter and subset LB
+func AddMetadataToHeaderMapping(endpointMetadataKeyToHeader map[string]string, literalConfig map[string]string) {
+	for endpointMetadataKey, v := range literalConfig {
+		endpointMetadataKey = strings.TrimSpace(endpointMetadataKey)
+		if endpointMetadataKey == "" {
+			Logger.Errorf("endpoint subset config key should not be empty")
+			continue
+		}
+		v = strings.TrimSpace(v)
+		fromHeaderName := strings.TrimSpace(strings.TrimPrefix(v, headerToMetadataSelectorValuePrefix))
+		if fromHeaderName == v {
+			continue
+		}
+		if fromHeaderName == "" {
+			Logger.Errorf("endpoint subset header name should not be empty, key: %s", endpointMetadataKey)
+		}
+		endpointMetadataKeyToHeader[endpointMetadataKey] = fromHeaderName
+	}
+}
+
+func NewMetadataToHeaderConfig(action *v1.RouteAction) *envoy_header_to_metadata_v3.Config {
+	if action == nil {
+		return nil
+	}
+	endpointMetadataKeyToHeader := make(map[string]string)
+	switch dest := action.GetDestination().(type) {
+	case *v1.RouteAction_Single:
+		AddMetadataToHeaderMapping(endpointMetadataKeyToHeader, dest.Single.GetSubset().GetValues())
+	case *v1.RouteAction_Multi:
+		for _, weightedDest := range dest.Multi.GetDestinations() {
+			dst := weightedDest.GetDestination()
+			AddMetadataToHeaderMapping(endpointMetadataKeyToHeader, dst.GetSubset().GetValues())
+		}
+	default: // other actions are not applicable
+	}
+
+	if len(endpointMetadataKeyToHeader) == 0 {
+		return nil
+	}
+	config := &envoy_header_to_metadata_v3.Config{}
+	for k, h := range endpointMetadataKeyToHeader {
+		config.RequestRules = append(config.RequestRules, &envoy_header_to_metadata_v3.Config_Rule{
+			Header: h,
+			OnHeaderPresent: &envoy_header_to_metadata_v3.Config_KeyValuePair{
+				Key:               k,
+				Type:              envoy_header_to_metadata_v3.Config_STRING,
+				MetadataNamespace: EnvoyLb,
+			},
+			OnHeaderMissing: nil,
+			Remove:          false,
+		})
+	}
+	return config
+}
+
+func setHeaderToMetadataFilter(route *v1.Route, out *envoy_config_route_v3.Route) {
+	if route == nil {
+		return
+	}
+	config := NewMetadataToHeaderConfig(route.GetRouteAction())
+	if config == nil {
+		return
+	}
+
+	if out.GetTypedPerFilterConfig() == nil {
+		out.TypedPerFilterConfig = make(map[string]*anypb.Any)
+	}
+	configAny, err := anypb.New(config)
+	if err != nil {
+		Logger.Errorf("failed to convert config to protobuf any type")
+		return
+	}
+	out.TypedPerFilterConfig[HTTPHeaderToMetadata] = configAny
 }
 
 func (h *httpRouteConfigurationTranslator) setWeightedClusters(params plugins.RouteParams, multiDest *v1.MultiDestination, out *envoy_config_route_v3.RouteAction, routeReport *validationapi.RouteReport, routeName string) error {
