@@ -10,6 +10,8 @@ import (
 	envoyhttp "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	envoy_req_without_query "github.com/envoyproxy/go-control-plane/envoy/extensions/formatter/req_without_query/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
+	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/rotisserie/eris"
 	v3 "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/type/v3"
 	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
@@ -236,6 +238,8 @@ func copyGrpcSettings(cfg *envoygrpc.HttpGrpcAccessLogConfig, alsSettings *als.A
 		LogName:             alsSettings.GrpcService.GetLogName(),
 		GrpcService:         svc,
 		TransportApiVersion: envoycore.ApiVersion_V3,
+		BufferFlushInterval: &duration.Duration{Seconds: 5},
+		BufferSizeBytes:     &wrappers.UInt32Value{Value: 16384000},
 	}
 	return cfg.Validate()
 }
