@@ -87,6 +87,7 @@ require (
 
 require (
 	github.com/google/go-github/v50 v50.0.0
+	github.com/stretchr/testify v1.8.0
 	golang.org/x/exp v0.0.0-20220921164117-439092de6870
 )
 
@@ -255,13 +256,12 @@ require (
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
-	github.com/sirupsen/logrus v1.8.1 // indirect
+	github.com/sirupsen/logrus v1.8.3 // indirect
 	github.com/solo-io/anyvendor v0.0.4 // indirect
 	github.com/solo-io/cue v0.4.6 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/src-d/gcfg v1.4.0 // indirect
-	github.com/stretchr/testify v1.8.0 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
